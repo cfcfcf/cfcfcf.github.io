@@ -1,0 +1,1061 @@
+<html>
+  <head>
+
+<!--Overwriting some Google defaults that yield ugly appearances.-->
+<style>
+div {
+    -webkit-touch-callout: none !important;
+    -webkit-user-select: none !important;
+    -khtml-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+    cursor: default !important;
+}
+table {
+  border-collapse: collapse;
+  padding: 0;
+  margin: 0 -20px -20px 0;
+  border: 0;
+}
+td {
+  font-family:arial;
+  font-size: 15px;
+}
+.google-visualization-tooltip {
+  border:solid 10px #bdbdbd !important;
+  border-radius: 20px !important;
+  background-color: none !important;
+  position: absolute !important;
+  box-shadow: 0px !important;
+  font-size: 12px !important;
+  padding: 10px !important;
+  -moz-box-shadow: 0px !important;
+  -webkit-box-shadow: 0px !important;
+}
+rect[stroke-opacity]{
+   stroke-width:0 !important;
+}
+.numberCircle {
+    border-radius: 50%;
+    width: 17px;
+    height: 17px;
+
+    background: gray;
+    color: white;
+    font-family:Courier;
+    text-align: center;
+}
+#chart_div {
+  padding: 0px;
+  margin: 0 0 0 -50px;
+  border: 0px;
+}
+
+.chartWithOverlay {
+  position: relative;
+  width: 600px;
+}
+
+.overlay {
+  position: absolute;
+  top: 10px;   /* chartArea top  */
+  right: 50px; /* chartArea left */
+}
+
+ul.tab {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+/* Float the list items side by side */
+ul.tab li {float: left;background-color: #f1f1f1;}
+
+/* Style the links inside the list items */
+ul.tab li a {
+    display: inline-block;
+    color: black;
+    text-align: center;
+    padding: 14px 16px;
+    text-decoration: none;
+    transition: 0.3s;
+    font-size: 17px;
+    font-family: Arial;
+    font-weight: semibold;
+}
+
+/* Change background color of links on hover */
+ul.tab li a:hover {background-color: #ddd;padding: 1px solid #ccc;}
+
+/* Create an active/current tablink class */
+ul.tab li a:focus, .active {background-color: #ccc;}
+
+/* Style the tab content */
+.tabcontent {
+    padding: 6px 12px;
+    border: none;
+    border-top: none;
+}
+
+.tabcontent {
+    -webkit-animation: fadeEffect 1s;
+    animation: fadeEffect 1s; /* Fading effect takes 1 second */
+}
+
+@-webkit-keyframes fadeEffect {
+    from {opacity: 0;}
+    to {opacity: 1;}
+}
+
+@keyframes fadeEffect {
+    from {opacity: 0;}
+    to {opacity: 1;}
+}
+
+</style>
+
+
+    <!--Load the AJAX API-->
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    <script type="text/javascript">
+
+    // Load the Visualization API and the piechart package.
+    google.load('visualization', '1.0', {'packages':['corechart','map','table']});
+
+    // Set a callback to run when the Google Visualization API is loaded.
+    google.setOnLoadCallback(drawGID);
+
+    // Global style variables.
+    var defaulBoxStyle = 'stroke-color: white; stroke-width: 10;';
+
+    // Global variables for deal rank scoring.
+    var locationWeight = 3;
+    var sectorWeight = 2;
+    var vcWeight = 5;
+    var vcFifty = ["500 Startups","Index Ventures","Accel","Kapor Capital","Andreessen Horowitz","Khosla Ventures","Arena Ventures","Kleiner Perkins","August Capital","Learn Capital","BAM Ventures","Lerer Hippeau Ventures","Baseline Ventures","Lowercase Capital","Battery Ventures","Mayfield Fund","Benchmark","NEA","Blumberg Capital","Pritzker Group","Canaan Partners","Obvious Ventures","Cross Culture Ventures","Right Side Capital","Crosscut Ventures","RRE Ventures","CrunchFund","Sequoia Capital","Digital Currency Group","Sherpa Capital","Felicis Ventures","Singularity University","First Round Capital","Slow Ventures","FLOODGATE Fund","Social Capital","Foundation Capital","Structure Capital","Founders Fund","SV Angel","Foundry Group","Techstars Ventures","General Catalyst","Union Square Ventures","Google Ventures","Upfront Ventures","Greycroft Partners","Wavemaker Partners","Greylock Partners","Y Combinator"];
+
+    // Global variables for defined cutoffs.
+    var minFracVC = 0.8;
+    var minFracDiv = 0.35;
+    var usFrac = 0.8;
+    var otherCountryFrac = 0.05;
+
+function openTab(evt, cityName) {
+    // Declare all variables
+    var i, tabcontent, tablinks;
+
+    // Get all elements with class="tabcontent" and hide them
+    tabcontent = document.getElementsByClassName("tabcontent");
+    for (i = 0; i < tabcontent.length; i++) {
+        tabcontent[i].style.display = "none";
+    }
+
+    // Get all elements with class="tablinks" and remove the class "active"
+    tablinks = document.getElementsByClassName("tablinks");
+    for (i = 0; i < tabcontent.length; i++) {
+        tablinks[i].className = tablinks[i].className.replace(" active", "");
+    }
+
+    // Show the current tab, and add an "active" class to the link that opened the tab
+    document.getElementById(cityName).style.display = "block";
+    evt.currentTarget.className += " active";
+}
+
+
+function backerFormatter(str) {
+  if (str.length > 0) {
+    return '<tr><td>'+ str + '</td></tr>';
+  } else {
+    return '';
+  }
+}
+
+function corrIndexFormatter(ind) {
+  if (ind === 1) {
+    return '<td><div class="numberCircle"><b>I</b></div></td>'
+  } else {
+    return ''
+  }
+}
+
+// A function to format the input raise details.
+function raiseFormatter(seriesType,valueType,raiseType) {
+  var out1 = '';
+  var out3 = '';
+  if (raiseType.length > 1 && (seriesType.length > 1 || valueType.length > 1)) {
+    out3 = ', '+raiseType
+  }
+  if (seriesType.length > 1 && (raiseType.length > 1 || valueType.length > 1)) {
+    out1 = seriesType+': '
+  }
+  return backerFormatter(out1+valueType+out3);
+}
+
+// A function to format the input valuation number.
+function valuationFormatter(num) {
+   var returnString = '';
+   if (num == 0) {
+     return returnString;
+   } else {
+     returnString = KMFormat(num);
+     return '<tr><td>'+returnString+' valuation</td></tr>';
+   }
+}
+
+function KMFormat(num) {
+     if (num >= 1000000) {
+        returnString = '$'+(num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+     } else if (num >= 1000) {
+        returnString = '$'+(num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+     } else {
+        returnString = '$'+num;
+     }
+     return returnString;
+}
+
+function diversityFormatter(loc,div,fol) {
+  var diversity = 'not diverse'
+
+  if (div === 'x') {
+    diversity = 'diverse'
+  }
+  if (fol === 'x') {
+    fol = 'follow-on'
+  } else if (fol.length < 1) {
+    fol = 'no follow-on'
+  }
+  if (loc.length > 0) {
+    loc = loc + ' \u2022 '
+  }
+
+  return '<tr><td style="font-size: 13;color:gray;border-top:5pt solid white;"><em>' + loc + diversity + ' \u2022 ' + fol + '</em></td></tr>';
+}
+
+///// Functions for string parsing for the second graph.
+
+function roundParser(str) {
+  //if (str.indexOf('Series A') > -1 || str.indexOf('Seed+') > -1) { // if 'Series A'|'Seed+' in string, is Series A
+  if (str === 'Series A') {
+    return 1 // Index of 'Series A'.
+  //} else if (str.indexOf('Seed') > -1) {
+  } else if (str === 'Seed') {
+    return 0 // Index of 'Seed'.
+  } else {
+    return 2 // Index of 'other'.
+  }
+}
+
+function indexParser(num) {
+// Will want future logic in here to parse 'crowd' deals.
+  if (num == 1) { // Allow implicit type conversion.
+    return 0 // index of VC index
+  } else {
+    return 1 // index of not on index
+  }
+
+}
+
+function platfParser(str) {
+  if (str === 'x') {
+    return 0
+  } else if (str.length < 1) {
+    return 1
+  } else {
+    return 2
+  }
+}
+
+function focusParser(str) {
+  if (str.substring(0,6) === 'Market') {
+    return 0;
+  } else if (str.substring(0,3) === 'B2B') {
+    return 1;
+  } else if (str.substring(0,8) === 'Consumer') {
+    return 2
+  } else if (str.substring(0,5) === 'Digit') {
+    return 3
+  } else if (str.substring(0,7) === 'FinTech') {
+    return 4
+  } else if (str.substring(0,4) === 'Expo') {
+    return 5
+  } else if (str.substring(0,6) === 'Health') {
+    return 6
+  } else {
+    return 7;
+  }
+}
+
+function vcParser(str,vcDict,addBool) {
+  // Updates the object.
+  // Returns a weight corresponding to the fraction
+  // of VCs on the VC50 list.
+
+  var onList = 0;
+
+  var noParen = str.replace(/ *[\(|\[][^)]*[\)|\]] */g, "").split(',');
+  for (value in noParen) {
+    vcName = noParen[value].trim();
+
+    if (addBool === 1) {
+      addToCountHash(vcName,vcDict);
+    } else {
+      if (vcDict[vcName] == 1) {
+        delete vcDict[vcName];
+      } else {
+        vcDict[vcName] -= 1;
+      }
+    }
+    if (vcFifty.indexOf(vcName) != -1) {
+      onList += 1;
+    }
+
+  }
+  //return vcDict;
+  return (0.75*onList + 0.25*noParen.length)/noParen.length;
+}
+
+function valuationParser(company,valuation,valTable,addBool) {
+  //var parVal = Number(valuation.replace(/\D/g,''));
+  var parVal = valuation;
+  if (addBool === 1) {
+    if (parVal > 1000) {
+      valTable.addRow([company,parVal]);
+    }
+  } else if (parVal > 1000) { // Deleting a company's valuation if the addition Boolean is not set.
+    var del = 0;
+    var tblIndex = valTable.getNumberOfRows() - 1;
+
+    while (del === 0) {
+      if (valTable.getValue(tblIndex,0) === company) {
+        valTable.removeRow(tblIndex);
+        del = 1;
+      }
+      tblIndex -= 1;
+    }
+    //valTable.removeRow(tblIndex);
+  }
+  return valTable;
+}
+
+// A function for finding the mean of a column in a table.
+function meanColumn(table,colIndex) {
+  var colSum = 0;
+  for (var y = 0, maxrows = table.getNumberOfRows(); y < maxrows; y++) {
+    if (!isNaN(table.getValue(y,colIndex))) {
+      colSum += table.getValue(y,colIndex);
+    }
+  };
+  return colSum/table.getNumberOfRows();
+}
+
+function addToCountHash(key,hash) {
+  if (key in hash) {
+    hash[key] += 1;
+  } else {
+    hash[key] = 1;
+  }
+  return hash;
+}
+
+// A function for finding the entropy for a hashmap of (key, count) values.
+function hashEntropy(hash) {
+
+  // An initial iteration gives the count of observations.
+  var hashCount = 0;
+  var entropy = 0;
+
+  for (key in hash) {
+    hashCount += hash[key];
+  }
+
+  // A second iteration calculates the entropy of the hashmap.
+  for (key in hash) {
+    entropy += -hash[key]/hashCount*Math.log(hash[key]/hashCount);
+  }
+
+  return entropy;
+}
+
+function normalizer(hash) {
+  var hi = Number.NEGATIVE_INFINITY;
+  var lo = Number.POSITIVE_INFINITY;
+  for (key in hash) {
+
+    lo = Math.min(lo,hash[key]);
+    hi = Math.max(hi,hash[key]);
+  }
+
+  lo -= 0.001;
+  hi += 0.001;
+
+  for (key in hash) {
+    var numer = hash[key] - lo;
+    var denom = hi - lo;
+    hash[key] = numer/denom;
+  }
+
+  return hash;
+}
+
+function initializeVCTable(hash) {
+  var table = new google.visualization.DataTable();
+  table.addColumn('string','VC');
+  table.addColumn('number','Investments');
+
+  for (key in hash) {
+    table.addRow([key,hash[key]]);
+  }
+  table.sort({column: 1,desc: true});
+
+  return table;
+}
+
+function initializeEntropyTable(hashOne,hashTwo,hashThr) {
+  var table = new google.visualization.DataTable();
+  table.addColumn('string','Company');
+  table.addColumn('number','Qualifies');
+  table.addColumn('string','Violates');
+  table.addColumn('number','Score');
+
+  for (key in hashOne) {
+    table.addRow([key,hashOne[key],hashTwo[key],hashThr[key]]);
+  }
+  table.sort([{column: 1,desc: true},{column: 3,desc: true}]);
+
+  return table;
+}
+
+function sumTable(secondPlotData) {
+      // Now, a section to generate the frame corresponding to the summary statistics to report.
+      var summaryTable = new google.visualization.DataTable();
+      summaryTable.addColumn('string');
+      summaryTable.addColumn('number');
+      summaryTable.addColumn('number');
+      summaryTable.addColumn('number');
+      summaryTable.addColumn('number');
+      summaryTable.addColumn('number');
+      summaryTable.addColumn('number');
+      summaryTable.addColumn('number');
+
+
+      // Adding round information, formatting.
+      summaryTable.addRow(['round', 
+{v:secondPlotData[0][0],f:'Seed: '+secondPlotData[0][0]+' ('+Math.round(100*secondPlotData[0][0]/(secondPlotData[0][0]+secondPlotData[0][1]+secondPlotData[0][2]))+'%)'}, 
+{v:secondPlotData[0][1],f:'Series A: '+secondPlotData[0][1]+' ('+Math.round(100*secondPlotData[0][1]/(secondPlotData[0][0]+secondPlotData[0][1]+secondPlotData[0][2]))+'%)'}, 
+{v:secondPlotData[0][2],f:'Other: '+secondPlotData[0][2]+' ('+Math.round(100*secondPlotData[0][2]/(secondPlotData[0][0]+secondPlotData[0][1]+secondPlotData[0][2]))+'%)'},
+{v:0,f:''}, 
+{v:0,f:''},
+{v:0,f:''}, 
+{v:0,f:''}, 
+
+]); // Round: Seed / Series A / other
+
+      summaryTable.addRow(['index', 
+{v:secondPlotData[1][0],f:'Index: '+secondPlotData[1][0]+' ('+Math.round(100*secondPlotData[1][0]/(secondPlotData[1][0]+secondPlotData[1][1]+secondPlotData[1][2]))+'%)'}, 
+{v:secondPlotData[1][1],f:'Non-index: '+secondPlotData[1][1]+' ('+Math.round(100*secondPlotData[1][1]/(secondPlotData[1][0]+secondPlotData[1][1]+secondPlotData[1][2]))+'%)'}, 
+{v:secondPlotData[1][2],f:'Crowd: '+secondPlotData[1][2]+' ('+Math.round(100*secondPlotData[1][2]/(secondPlotData[1][0]+secondPlotData[1][1]+secondPlotData[1][2]))+'%)'},
+{v:0,f:''}, 
+{v:0,f:''}, 
+{v:0,f:''}, 
+{v:0,f:''}, 
+
+
+]); // Index: Index/ Non-index / crowd
+
+      summaryTable.addRow(['platform', 
+{v:secondPlotData[2][0],f:'follow-on: '+secondPlotData[2][0]+' ('+Math.round(100*secondPlotData[2][0]/(secondPlotData[2][0]+secondPlotData[2][1]+secondPlotData[2][2]))+'%)'}, 
+{v:secondPlotData[2][1],f:'no follow-on: '+secondPlotData[2][1]+' ('+Math.round(100*secondPlotData[2][1]/(secondPlotData[2][0]+secondPlotData[2][1]+secondPlotData[2][2]))+'%)'}, 
+{v:secondPlotData[2][2],f:'possible follow-on: '+secondPlotData[2][2]+' ('+Math.round(100*secondPlotData[2][2]/(secondPlotData[2][0]+secondPlotData[2][1]+secondPlotData[2][2]))+'%)'},
+{v:0,f:''}, 
+{v:0,f:''}, 
+{v:0,f:''}, 
+{v:0,f:''}, 
+
+]); // Platform: Follow-on / No follow-on / Possibly
+
+      summaryTable.addRow(['diversity', 
+{v:secondPlotData[3][0],f:'diverse: '+secondPlotData[3][0]+' ('+Math.round(100*secondPlotData[3][0]/secondPlotData[3].reduce(function(a, b) { return a + b; }, 0))+'%)'}, 
+{v:secondPlotData[3][1],f:'not diverse: '+secondPlotData[3][1]+' ('+Math.round(100*secondPlotData[3][1]/secondPlotData[3].reduce(function(a, b) { return a + b; }, 0))+'%)'}, 
+{v:0,f:''}, 
+{v:0,f:''}, 
+{v:0,f:''}, 
+{v:0,f:''}, 
+{v:0,f:''}, 
+
+]); // Diversity: Diverse / Not diverse / unused
+
+      summaryTable.addRow(['focus area', 
+{v:secondPlotData[4][2],f:'Consumer Products / Tech: '+secondPlotData[4][2]+' ('+Math.round(100*secondPlotData[4][2]/secondPlotData[4].reduce(function(a, b) { return a + b; }, 0))+'%)'}, 
+{v:secondPlotData[4][0],f:'Marketplace / eCommerce: '+secondPlotData[4][0]+' ('+Math.round(100*secondPlotData[4][0]/secondPlotData[4].reduce(function(a, b) { return a + b; }, 0))+'%)'}, 
+{v:secondPlotData[4][1],f:'B2B /  Enterprise: '+secondPlotData[4][1]+' ('+Math.round(100*secondPlotData[4][1]/secondPlotData[4].reduce(function(a, b) { return a + b; }, 0))+'%)'}, 
+{v:secondPlotData[4][3],f:'Digital Media: '+secondPlotData[4][3]+' ('+Math.round(100*secondPlotData[4][3]/secondPlotData[4].reduce(function(a, b) { return a + b; }, 0))+'%)'}, 
+{v:secondPlotData[4][4],f:'FinTech: '+secondPlotData[4][4]+' ('+Math.round(100*secondPlotData[4][4]/secondPlotData[4].reduce(function(a, b) { return a + b; }, 0))+'%)'}, 
+{v:secondPlotData[4][5],f:'Exponential Tech: '+secondPlotData[4][5]+' ('+Math.round(100*secondPlotData[4][5]/secondPlotData[4].reduce(function(a, b) { return a + b; }, 0))+'%)'}, 
+{v:secondPlotData[4][6],f:'Health / Health Tech: '+secondPlotData[4][6]+' ('+Math.round(100*secondPlotData[4][6]/secondPlotData[4].reduce(function(a, b) { return a + b; }, 0))+'%)'}, 
+
+]); // Focus areas: see above
+
+return summaryTable;
+}
+
+
+// Drawing the scoring 'entropy' table for fund cutoffs.
+function drawEntropyTable(dataset,ventureHash,sectorHash,localeHash,diverseHash,cntryHash,realDealCount,sumAcceptedDeals,sumVCDeals) {
+
+      // Iterating through the remaining non-index companies.
+      // For each one, record their name and run the hash entropy.
+      // A hashmap linking company name to entropy.
+      var dealEntropy = {};
+      var vcEntropy = {};
+      var focusEntropy = {};
+      var locationEntropy = {};
+
+      var dealClass = 0;
+      var cutoffHash = {};
+      var improveHash = {};
+
+      for (var y = 0, maxrows = dataset.getNumberOfRows(); y < maxrows; y++) {
+        if (dataset.getValue(y,0) === '') {
+          dealClass++;
+        } else if (dealClass > 0) {
+          // 
+          var ventureHashCopy = JSON.parse(JSON.stringify(ventureHash));
+          var sectorHashCopy = JSON.parse(JSON.stringify(sectorHash));
+          var localeHashCopy = JSON.parse(JSON.stringify(localeHash));
+          var diverseHashCopy = JSON.parse(JSON.stringify(diverseHash));
+          var cntryHashCopy = JSON.parse(JSON.stringify(cntryHash));
+
+          vcWeight = vcParser(dataset.getValue(y,1),ventureHashCopy,1);
+
+          thisFocus = focusParser(dataset.getValue(y,12));
+          if (thisFocus !== 7) {
+            addToCountHash(thisFocus,sectorHashCopy);
+          }
+          addToCountHash(dataset.getValue(y,7),localeHashCopy);
+          addToCountHash(platfParser(dataset.getValue(y,9)),diverseHashCopy);
+          addToCountHash(dataset.getValue(y,13),cntryHashCopy);
+
+          // has to be turned into a table eventually
+          vcEntropy[dataset.getValue(y,0)] = vcWeight*hashEntropy(ventureHashCopy);
+          focusEntropy[dataset.getValue(y,0)] = hashEntropy(sectorHashCopy);
+          locationEntropy[dataset.getValue(y,0)] = hashEntropy(localeHashCopy);
+
+          // second column to assess if it's an improvement
+          improveHash[dataset.getValue(y,0)] = '';
+   
+          totalDeals = sumAcceptedDeals + 1; // since considering adding one more company
+
+          // Diversity fraction logic testing.
+          if ((sumAcceptedDeals - realDealCount + diverseHashCopy[0])/totalDeals >= minFracDiv) {
+            cutoffHash[dataset.getValue(y,0)] = 1;
+          } else {
+            cutoffHash[dataset.getValue(y,0)] = 0;
+            // if the added deal is not diverse and we aren't meeting
+            // the diversity cutoff, note that in the output table
+            if (diverseHash[0] === diverseHashCopy[0]) {
+              improveHash[dataset.getValue(y,0)] += 'diversity ';
+            }
+          }
+
+          // VC50 fraction logic testing.
+          if (indexParser(dataset.getValue(y,2)) === 0) {
+            if ((sumAcceptedDeals - realDealCount + sumVCDeals+1)/totalDeals >= minFracVC) {
+              cutoffHash[dataset.getValue(y,0)] += 1;
+            }
+          } else {
+            if ((sumAcceptedDeals - realDealCount + sumVCDeals)/totalDeals >= minFracVC) {
+              cutoffHash[dataset.getValue(y,0)] += 1;
+            } else {
+              improveHash[dataset.getValue(y,0)] += 'VC50 ';
+            }
+          }
+
+          // usFrac, otherCountryFrac
+          // Country fraction logic testing.
+          var passesCountryTest = 1;
+          for (key in cntryHashCopy) {
+            if (key === 'United States') {
+              if ((sumAcceptedDeals - realDealCount + cntryHashCopy[key])/totalDeals < usFrac) {
+                // usFrac failed
+                passesCountryTest = 0;
+                if (dataset.getValue(y,13) != 'United States') {
+                  improveHash[dataset.getValue(y,0)] += 'US fraction ';
+                }
+              }
+            } else {
+              if (cntryHashCopy[key]/totalDeals > otherCountryFrac) {
+                // other country fraction failed
+                passesCountryTest = 0;
+                if (dataset.getValue(y,13) === key) {
+                  improveHash[dataset.getValue(y,0)] += key + ' fraction ';
+                }
+              }
+            }
+          }
+          cutoffHash[dataset.getValue(y,0)] += passesCountryTest;
+          
+
+        }
+      }
+
+      vcEntropy = normalizer(vcEntropy);
+      focusEntropy = normalizer(focusEntropy);
+      locationEntropy = normalizer(locationEntropy);
+
+      for (key in vcEntropy) {
+        dealEntropy[key] = vcWeight*vcEntropy[key] + sectorWeight*focusEntropy[key] + locationWeight*locationEntropy[key];
+      }
+ 
+      var entropyTable = initializeEntropyTable(cutoffHash,improveHash,dealEntropy);
+      var chart7 = new google.visualization.Table(document.getElementById('chart7_div'));
+      chart7.draw(entropyTable, {width: '500'});
+
+}
+
+/////
+
+
+    function drawGID() {
+      var queryString = encodeURIComponent('SELECT A,B,C,D,F,G,H,J,L,M,N,AD,I,K');
+
+      var query = new google.visualization.Query(
+          'https://docs.google.com/spreadsheets/d/1mlQKs1wfLHl7HKWEfeQkNVTsl9VNlSAdQ8jyVhg9VOQ/gviz/tq?gid=0&tq=' + queryString);
+          //'https://docs.google.com/spreadsheets/d/1L51d7QoM-jv9xRBMGzvCJdX-IDRHGNSStyG_2QeUmKU/gviz/tq?gid=393199306&tq=' + queryString);
+      query.send(handleQueryResponse);
+    }
+
+    function handleQueryResponse(response) {
+      if (response.isError()) {
+        alert('Error in query: ' + response.getMessage() + ' ' + response.getDetailedMessage());
+        return;
+      }
+
+      // Loading the spreadsheet data.
+      var data = response.getDataTable();
+
+      // An initial loop through the table is needed to determine the number of nonempty rows.
+      var nonEmptyRows = 0;
+      for (var y = 0, maxrows = data.getNumberOfRows(); y < maxrows; y++) {
+           if (data.getValue(y,0) !== '') {
+             nonEmptyRows++;
+           }
+      };
+
+      // Creating a new table that the spreadsheet data will be written to.
+      var dataTable = new google.visualization.DataTable();
+      dataTable.addColumn('string');
+
+      // Creating a new array to label the portfolio statuses.
+      var portfolioStatuses = ['accepted','pending','on deck','possible','other'];
+
+      for (var y = 0, maxrows = nonEmptyRows; y < maxrows; y++) {
+           dataTable.addColumn('number');
+           dataTable.addColumn({'type': 'string', 'role': 'tooltip', 'p': {'html': true}});
+           dataTable.addColumn({'type': 'string', role: 'style' });
+           dataTable.addColumn({'type': 'string', role: 'annotation' });
+
+      };
+
+      // An array of arrays holding text data for the second plot.
+      // Array order is round, index status, platform follow-on, diversity.
+      // round: Seed, Series A, other
+      var secondPlotData = [[0,0,0],[0,0,0],[0,0,0],[0,0,0],[0,0,0,0,0,0,0,0]];
+
+      // The third plot (portfolio value over time) is static and does not update
+      // based on the companies selected.
+      var timeData = new google.visualization.DataTable();
+      timeData.addColumn('date');
+      timeData.addColumn('number');
+
+      // The map plot's map data. Physical location, then label are columns.
+      var mapData = new google.visualization.DataTable();
+      mapData.addColumn('string');
+      mapData.addColumn('string');
+      var mapHash = {};
+
+      // A table for counting the number of times VCs appear in the portfolio.
+      var vcHash = {};
+      // A table for counting the number of times focus categories appear in the portfolio.
+      var focusHash = {};
+      // A table for counting the location count.
+      var locationHash = {};
+      var diversityHash = {};
+      var countryHash = {};
+      var sumAcceptedDeals = 0;
+      var sumVCDeals = 0;
+
+      // A table for tracking the valuations of portfolio companies.
+      var valuationData = new google.visualization.DataTable();
+      valuationData.addColumn('string','Company');
+      valuationData.addColumn('number','Valuation');
+
+      // We now write and format the data from the original pull to the new table for plotting.
+      var portfolioClass = 0;
+      var originalRows = []; // Holds the original row assignment of each company.
+
+      // An array for tracking the length of the largest portfolio class.
+      // Used for rescaling the length of the main chart.
+      var portfolioClassCount = [0,0,0,0,0];
+
+      currentRow = [portfolioStatuses[portfolioClass]];
+
+      for (var y = 0, maxrows = data.getNumberOfRows(); y < maxrows; y++) {
+
+           if (data.getValue(y,0) === '') {
+             portfolioClass++;
+
+             // append appropriate number of 0's on back of currentRow
+             var origLength = (currentRow.length-1)/4; // 1 is from the leading string
+             for (var back = origLength, toAdd = nonEmptyRows; back < toAdd; back++) {
+               currentRow.push(0,'', defaulBoxStyle,'');
+             }
+
+             dataTable.addRow(currentRow);
+             currentRow = [portfolioStatuses[portfolioClass]]
+
+             // append appropriate number of 0's on front of currentRow
+             for (var back = 0, toAdd = y - portfolioClass + 1; back < toAdd; back++) {
+               currentRow.push(0,'', defaulBoxStyle,'');
+             }
+
+
+           } else {
+
+             portfolioClassCount[portfolioClass]++;
+
+             // Adding the total amount invested to the cumulative investment table.
+             if (data.getValue(y,11) > new Date('2013-01-01')) {
+               timeData.addRow([data.getValue(y,11),0]);
+             }
+
+             var tableFormat = '<table><tr><td><strong>'.concat(data.getValue(y,0),'</strong></td>', corrIndexFormatter(data.getValue(y,2)),'</tr>', backerFormatter(data.getValue(y,1)),raiseFormatter(data.getValue(y,3),data.getValue(y,5),data.getValue(y,8)), valuationFormatter(data.getValue(y,4)+0),
+diversityFormatter(data.getValue(y,7),data.getValue(y,9),data.getValue(y,10)),'</table>');
+
+             if (portfolioClass === 0) {
+               secondPlotData[0][roundParser(data.getValue(y,3))]++; // Adding round info.
+               secondPlotData[1][indexParser(data.getValue(y,2))]++; // Adding string of the VC index status.
+               secondPlotData[2][platfParser(data.getValue(y,10))]++; // Adding string of the platform follow-on status.
+               secondPlotData[3][platfParser(data.getValue(y,9))]++; // Adding string of the diversity status.
+               secondPlotData[4][focusParser(data.getValue(y,12))]++; // Adding string of the focus category.
+
+               if (data.getValue(y,7) in mapHash) {
+                 mapHash[data.getValue(y,7)] += data.getValue(y,0) + '<br>';
+               } else {
+                 mapHash[data.getValue(y,7)] = data.getValue(y,0) + '<br>';
+               }
+
+               // Parsing the string of involved VCs and adding to a counting hashmap.
+               var vcFlag = vcParser(data.getValue(y,1),vcHash,1);
+               sumAcceptedDeals++;
+               if (indexParser(data.getValue(y,2)) === 0) {
+                 sumVCDeals += 1;
+               }
+
+               // Parsing the focus, location categories and adding to a counting hashmap.
+               addToCountHash(focusParser(data.getValue(y,12)),focusHash);
+               addToCountHash(data.getValue(y,7),locationHash);
+               addToCountHash(platfParser(data.getValue(y,9)),diversityHash);
+               addToCountHash(data.getValue(y,13),countryHash);
+
+
+               // Parsing the valuation. If interpretable, added to the valuation table.
+               valuationParser(data.getValue(y,0),data.getValue(y,4),valuationData,1);
+
+             }
+
+             // Adds an entry corresponding to the current deal for this portfolio status.
+             currentRow.push(1,tableFormat, defaulBoxStyle, data.getValue(y,0).substring(0,2)+' \u2063');
+             originalRows.push(portfolioClass);
+
+           }
+
+
+      };
+
+      var summaryOptions = {
+        bars: 'vertical',
+        legend: 'none',
+        width:900,
+        height:250,
+      };
+
+      var options = {
+
+        annotations: {
+        textStyle: {
+          fontSize: 17,
+          fontName: 'Courier',
+          bold: true,
+          opacity: 0.8,
+          }
+        },
+
+        bars: 'horizontal',
+        backgroundColor: 'transparent',
+        tooltip: {isHtml: true,}, // trigger:'both'
+        legend: 'none',
+        title: 'VC Index Fund',
+        fontSize: 32,
+        isStacked: true,
+        hAxis: { textPosition: 'none' , gridlines: {color: 'white'},},
+        vAxis: {textStyle: {fontSize: 16.2}},
+        width: 65*Math.max.apply(Math, portfolioClassCount),
+        height: 600,
+
+      };
+
+      var timeOptions = {
+        title: 'Total Investment',
+        // hAxis: {title: 'Year',  titleTextStyle: {color: '#333'}},
+        vAxis: {minValue: 0, format: '$###,###,###'},
+        legend: 'none',
+        titleTextStyle: {fontSize: '18'},
+        width:900,height:500,
+
+      };
+
+      var mapOptions = {
+        mapType: 'styledMap',
+        showTip: true,
+        useMapTypeControl: true,
+        maps: {
+          styledMap: {
+            name: 'Map', // This name will be displayed in the map type control.
+
+        }},
+        width: 1100,
+        height: 600,
+      };
+
+      var valOptions = {
+        width: 600,
+        legend: { position: 'none' },
+        hAxis: {format: 'short'},
+      };
+
+
+      // Setting the default number selected to be the number of deals already accepted.
+      document.getElementById("fundSize").min = sumAcceptedDeals;
+      document.getElementById("fundSize").value = sumAcceptedDeals;
+
+      // Drawing chart7, the scoring/cutoff table.
+      drawEntropyTable(data,vcHash,focusHash,locationHash,diversityHash,countryHash,sumAcceptedDeals,sumAcceptedDeals,sumVCDeals);
+
+      document.getElementById("fundSize").addEventListener("click", function(){
+        // The "max" bit ensures it uses the input value if selected and the original
+        // fund accepted deals size if no input.
+        var fundCount = Math.max(document.getElementById("fundSize").value, sumAcceptedDeals);
+        drawEntropyTable(data,vcHash,focusHash,locationHash,diversityHash,countryHash,sumAcceptedDeals,fundCount,sumVCDeals);
+      });
+
+
+      // The top panel chart displaying the fund portfolio.
+      var chart = new google.visualization.BarChart(document.getElementById('chart_div'));
+      chart.draw(dataTable, options);
+
+      var chart2 = new google.visualization.ColumnChart(document.getElementById('chart2_div'));
+      chart2.draw(sumTable(secondPlotData), summaryOptions);
+
+      var chart3 = new google.visualization.AreaChart(document.getElementById('chart3_div'));
+      // Time value data is not in order: it has to be sorted and the values adjusted.
+      timeData.sort(0);
+      var cmAmount = 0;
+      for (var y = 0, maxrows = timeData.getNumberOfRows(); y < maxrows; y++) {
+           cmAmount += 100000;
+           timeData.setCell(y,1,cmAmount);
+      };
+      timeData.addRow([new Date(), cmAmount]); // Adding the current datetime.
+      
+      chart3.draw(timeData, timeOptions);
+
+      for (key in mapHash) {
+        mapData.addRow([key,'<b>'+key+'</b><br>'+mapHash[key]]);
+      }
+      var chart4 = new google.visualization.Map(document.getElementById('chart4_div'));
+      chart4.draw(mapData,mapOptions);
+
+      var vcTable = initializeVCTable(vcHash);
+
+      var chart5 = new google.visualization.Table(document.getElementById('chart5_div'));
+      chart5.draw(vcTable, {width: '500'});
+
+      document.getElementById("testparagraph").innerHTML = 'mean: '+KMFormat(meanColumn(valuationData,1));
+      var chart6 = new google.visualization.Histogram(document.getElementById('chart6_div'));
+      chart6.draw(valuationData, valOptions);
+
+
+           
+      google.visualization.events.addListener(chart, 'select', function() {
+        // An event that captures the clicked part of the chart and responds accordingly.
+        var selection = chart.getSelection();
+        var row = selection[0].row;
+        var col = Math.floor((selection[0].column - 1)/4)*4 + 1;  // Adjusting to round down the style, tooltip, etc., elements.
+        var originalRow = originalRows[(col-1)/4];
+        var dataOriginalRow = originalRow + (col-1)/4;
+
+        // When a cell is clicked on, move it to the 'accepted' row.
+        // Else, return it to its original row.
+        if (row != 0) {
+          // Updating the table with the selected element, and deleting the clicked area.
+          dataTable.setCell(0,col,1);
+          dataTable.setCell(0,col+1,dataTable.getValue(row,col+1)); // Setting the new tooltip.
+          dataTable.setCell(0,col+3,dataTable.getValue(row,col+3)); // Setting the new annotation.
+          // Readjusting the count of companies in each class based on the click.
+          //portfolioClassCount[row]--;
+          //portfolioClassCount[0]++;
+
+          // Adding the corresponding elements to the second chart.
+          secondPlotData[0][roundParser(data.getValue(dataOriginalRow,3))]++; // Adding round info.
+          secondPlotData[1][indexParser(data.getValue(dataOriginalRow,2))]++; // Adding string of the VC index status.
+          secondPlotData[2][platfParser(data.getValue(dataOriginalRow,10))]++; // Adding string of the platform follow-on status.
+          secondPlotData[3][platfParser(data.getValue(dataOriginalRow,9))]++; // Adding string of the diversity status.
+          secondPlotData[4][focusParser(data.getValue(dataOriginalRow,12))]++; // Adding string of the focus category.
+
+          // Updating the map data.
+          if (data.getValue(dataOriginalRow,7) in mapHash) {
+            mapHash[data.getValue(dataOriginalRow,7)] += data.getValue(dataOriginalRow,0) + '<br>';
+          } else {
+            mapHash[data.getValue(dataOriginalRow,7)] = data.getValue(dataOriginalRow,0) + '<br>';
+          }
+
+          // Updating the involved VCs list.
+          vcParser(data.getValue(dataOriginalRow,1),vcHash,1);
+
+          // Updating the valuation data.
+          valuationParser(data.getValue(dataOriginalRow,0),data.getValue(dataOriginalRow,4),valuationData,1);
+
+          // Deleting the old elements.
+          dataTable.setCell(row,col,0); // Deleting the cell in the chart.
+          dataTable.setCell(row,col+3,''); // Deleting the old annotation.
+        } else {
+          if (originalRow != 0) {
+            // Readjusting the count of companies in each class based on the click.
+            // Updating the table with the selected element, and deleting the clicked area.
+            dataTable.setCell(originalRow,col,1);
+            dataTable.setCell(originalRow,col+3,dataTable.getValue(0,col+3)); // Setting the new annotation.
+            // Deleting the old elements.
+            dataTable.setCell(0,col,0); // Deleting the cell in the chart.
+            dataTable.setCell(0,col+3,''); // Deleting the old annotation.
+
+            // Deleting the map entry for that company.
+            // Note that it appears to be impossible to delete an empty map pin, so it is left in.
+            var newMapValue = mapHash[data.getValue(dataOriginalRow,7)].replace(data.getValue(dataOriginalRow,0)+'<br>','');
+            mapHash[data.getValue(dataOriginalRow,7)] = newMapValue;
+
+            // Removing a VC entry for that company.
+            vcParser(data.getValue(dataOriginalRow,1),vcHash,0);
+
+            // Removing the valuation for that company.
+            valuationParser(data.getValue(dataOriginalRow,0),data.getValue(dataOriginalRow,4),valuationData,0);
+
+            secondPlotData[0][roundParser(data.getValue(dataOriginalRow,3))]--; // Subtracting round info.
+            secondPlotData[1][indexParser(data.getValue(dataOriginalRow,2))]--; // Subtracting string of the VC index status.
+            secondPlotData[2][platfParser(data.getValue(dataOriginalRow,10))]--; // Subtracting string of the platform follow-on status.
+            secondPlotData[3][platfParser(data.getValue(dataOriginalRow,9))]--; // Subtracting string of the diversity status.
+            secondPlotData[4][focusParser(data.getValue(dataOriginalRow,12))]--; // Subtracting string of the focus category.
+          }
+        }
+
+
+        // Redrawing the chart with the updated assignment.
+        chart.draw(dataTable, options);
+        chart2.draw(sumTable(secondPlotData), summaryOptions);
+
+        // Redrawing the map chart with the updated map data.
+        for (key in mapHash) {
+          mapData.addRow([key,'<b>'+key+'</b><br>'+mapHash[key]]);
+        }
+        var chart4 = new google.visualization.Map(document.getElementById('chart4_div'));
+        chart4.draw(mapData,mapOptions);
+
+        // Redrawing the VC table with the updated data.
+        var vcTable = initializeVCTable(vcHash);
+        var chart5 = new google.visualization.Table(document.getElementById('chart5_div'));
+        chart5.draw(vcTable, {width: '500'});
+
+        // Redrawing the valuation histogram with the updated data.
+        document.getElementById("testparagraph").innerHTML = 'mean: '+KMFormat(meanColumn(valuationData,1));
+        var chart6 = new google.visualization.Histogram(document.getElementById('chart6_div'));
+        chart6.draw(valuationData, valOptions);
+
+        });
+
+    }
+
+
+
+
+// If a delay is not introduced (or something equivalent) the map will not load correctly.
+function load() {
+  tabcontent = document.getElementsByClassName("tabcontent");
+  for (i = 0; i < tabcontent.length; i++) {
+      tabcontent[i].style.display = "none";
+  }
+}
+window.onload = setTimeout(load,3000); // 3s delay for map loading.
+
+
+    </script>
+
+
+  </head>
+
+  <body>
+
+<div id="chart_div"></div>
+
+<form>
+    Fund size
+    <input type="number" id="fundSize" step=1 required />
+</form>
+
+<ul class="tab" id="tabs">
+  <li><a href="#tabs" class="tablinks" onclick="openTab(event, 'Charts')">Charts</a></li>
+  <li><a href="#tabs" class="tablinks" onclick="openTab(event, 'Total Investment')">Investment</a></li>
+  <li><a href="#tabs" class="tablinks" onclick="openTab(event, 'Map')">Map</a></li>
+  <li><a href="#tabs" class="tablinks" onclick="openTab(event, 'vcCountTable')">VCs</a></li>
+  <li><a href="#tabs" class="tablinks" onclick="openTab(event, 'valueTable')">Valuation</a></li>
+  <li><a href="#tabs" class="tablinks" onclick="openTab(event, 'entropyTable')">Score</a></li>
+</ul>
+
+<div id="Charts" class="tabcontent">
+  <div id="chart2_div"></div>
+</div>
+
+<div id="Total Investment" class="tabcontent">
+  <div id="chart3_div"></div> 
+</div>
+
+<div id="Map" class="tabcontent">
+    <div id="chart4_div" style="width: 1100px; height: 600px;"></div>
+</div>
+
+<div id="vcCountTable" class="tabcontent">
+  <div id="chart5_div"></div>
+</div>
+
+<div id="valueTable" class="tabcontent">
+  <div class='chartWithOverlay'>
+    <div id="chart6_div"></div>
+
+    <div class="overlay">
+      <div style="font-family:'Arial Black'; font-size: 18px;" id='testparagraph'></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="entropyTable" class="tabcontent">
+  <div id="chart7_div"></div>
+</div>
+
+<div class="results"></div>
+
+
+
+
+
+  </body>
+</html>
